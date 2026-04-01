@@ -51,23 +51,28 @@ export async function POST(req: NextRequest) {
 
         const token = jwt.sign(
                 JSON.stringify({
+					id: result.rows[0].id,
                     username,
                     role
                 }),
                 process.env.JWT_SECRET || "fallback_secret"
             );
 
-		return NextResponse.json(
+		const response =  NextResponse.json(
 			{
 				success: true,
 				message: "Signup successful",
 				result
 			},
 			{ status: 201 }
-		).cookies.set("token", token, {
+		)
+
+		response.cookies.set("token", token, {
             httpOnly: true,
             sameSite: "lax"
         })
+
+		return response 
 
 	} catch (error) {
         

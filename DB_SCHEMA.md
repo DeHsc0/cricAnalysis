@@ -19,12 +19,12 @@ CREATE TYPE women_category AS ENUM ('under_16', 'under_19', 'under_23', 'senior'
 -- ================================
 CREATE TABLE users (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
     username    VARCHAR(50) UNIQUE NOT NULL,
-    password    TEXT NOT NULL,               -- bcrypt hash
+    password    TEXT NOT NULL,
     name        VARCHAR(100) NOT NULL,
-
     role        user_role NOT NULL,
+    
+    created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
 
     created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP

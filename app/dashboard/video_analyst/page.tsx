@@ -1,10 +1,9 @@
-
 import pool from "@/lib/db"
 import { getUserId } from "@/lib/utils"
 import { cookies } from "next/headers"
 import { redirect } from "next/navigation"
 
-import AdminPageClient from "./AdminPageClient"
+import VideoAnalystPageClient from "./video-analyst-page-client"
 
 async function resolveCurrentUserId(token: string) {
   const payload = getUserId(token)
@@ -20,18 +19,18 @@ async function resolveCurrentUserId(token: string) {
   return result.rows[0]?.id ?? null
 }
 
-export default async function AdminPage() {
+export default async function VideoAnalystPage() {
   const token = (await cookies()).get("token")?.value
 
   if (!token) {
     redirect("/login")
   }
 
-  const adminId = await resolveCurrentUserId(token)
+  const analystId = await resolveCurrentUserId(token)
 
-  if (!adminId) {
+  if (!analystId) {
     redirect("/login")
   }
 
-  return <AdminPageClient adminId={adminId} />
+  return <VideoAnalystPageClient analystId={analystId} />
 }

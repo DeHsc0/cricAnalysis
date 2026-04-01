@@ -1,14 +1,19 @@
 "use client"
 
-import { CircleChevronDown } from "lucide-react";
+import { CircleChevronDown, Loader } from "lucide-react";
 import loginBg from "../../public/login_bg.png";
 import { useForm } from "react-hook-form";
 import { loginSchema } from "@/types/zod";
 import z from "zod";
 import { toast } from "sonner"
 import bcrypt from "bcryptjs";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function LoginPage () {
+
+    const router = useRouter()
+    const [ loading , setLoading ] = useState<boolean>(false)
 
     const { register , handleSubmit } = useForm<z.infer<typeof loginSchema>>()
 
@@ -19,6 +24,8 @@ export default function LoginPage () {
 
     }) => {
 
+        setLoading(true)
+        
         const  hashedPassword = await bcrypt.hash(data.password , 12)
 
         console.log(hashedPassword)
@@ -34,10 +41,16 @@ export default function LoginPage () {
             }),
         });
 
-        if(response.status !== 200 )return toast("Login Failed Please try again later")
+        const responseData = await response.json()
+
+        if(response.status !== 200 )return toast(responseData.message)
 
         toast("Login Successfull")
+        
+        router.push("/dashboard")
 
+        setLoading(false)
+        
     }
 
     return (
@@ -75,7 +88,7 @@ export default function LoginPage () {
                                 USERNAME
                             </label>
 
-                            <input required { ...register("username" , {required : true })} className="py-2 px-3 text-sm placeholder:text-sm border rounded-lg border-[#ffffff1a] " placeholder="eg. Virat"/>
+                            <input required { ...register("username" , {required : true })} className="py-2 px-3 text-sm placeholder:text-sm border bg-white rounded-lg border-[#ffffff1a] " placeholder="eg. Virat"/>
 
 
                         </div>
@@ -91,7 +104,7 @@ export default function LoginPage () {
                                 { ...register("password" , {required : true })}
                                 id="password"
                                 type="password"
-                                className="py-2 px-3 text-sm placeholder:text-sm border rounded-lg border-[#ffffff1a]"
+                                className="py-2 px-3 text-sm bg-white placeholder:text-sm border rounded-lg border-[#ffffff1a]"
                                 placeholder="Enter your password"
                             />
 
@@ -100,7 +113,7 @@ export default function LoginPage () {
                         
                         <button type="submit" className="w-full p-3 bg-linear-to-br from-blue-400 to-blue-500 text-white border-0 rounded-[10px] [font-family:var(--font)] text-base font-semibold cursor-pointer transition-all duration-300 ease-in-out flex justify-center items-center shadow-[0_4px_12px_rgba(59,130,246,0.3)] mt-1 hover:from-blue-500 hover:to-blue-600 hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(59,130,246,0.4)] active:translate-y-0">
 
-                            Login
+                            { loading ? <Loader className="animate-spin text-white" /> : <p>Login</p>   }
 
                         </button>
 

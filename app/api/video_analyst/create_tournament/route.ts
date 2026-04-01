@@ -1,5 +1,4 @@
 import pool from "@/lib/db";
-import { getUserId } from "@/lib/utils";
 import { createTournamentSchema } from "@/types/zod";
 import { NextRequest, NextResponse } from "next/server";
 
