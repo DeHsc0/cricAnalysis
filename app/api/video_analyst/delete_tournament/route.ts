@@ -1,4 +1,4 @@
-import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+import { DeleteObjectsCommand, ListObjectsV2Command, ListObjectsV2CommandOutput } from "@aws-sdk/client-s3";
 import jwt from "jsonwebtoken";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
@@ -91,7 +91,7 @@ async function deletePrefix(bucket: string, prefix: string) {
   let failedObjects = 0;
 
   do {
-    const listed = await s3Client.send(
+    const listed :  ListObjectsV2CommandOutput = await s3Client.send(
       new ListObjectsV2Command({
         Bucket: bucket,
         Prefix: prefix,
