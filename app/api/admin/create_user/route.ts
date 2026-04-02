@@ -8,6 +8,20 @@ import bcrypt from "bcryptjs"
 import jwt from "jsonwebtoken"
 import { NextRequest, NextResponse } from "next/server"
 
+function sanitizePathSegment(value: string): string {
+  const cleaned = value
+    .replace(/[\\/]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[^a-zA-Z0-9 ._-]/g, "")
+    .trim()
+
+  return cleaned.length > 0 ? cleaned : "untitled"
+}
+
+function buildPlayerFolderName(playerName: string, playerId: string): string {
+  return `${sanitizePathSegment(playerName)}_${playerId}`
+}
+
 export async function POST(req: NextRequest) {
   const data = await req.json()
   const parsedData = createPlayerSchema.safeParse(data)
@@ -25,31 +39,51 @@ export async function POST(req: NextRequest) {
   const hashedPassword = await bcrypt.hash(password, 12)
 
   try {
-    let createdBy: string | null = null
     const token = req.cookies.get("token")?.value
 
-    if (token) {
-      try {
-        const verified = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret")
-        const payload = (typeof verified === "string" ? JSON.parse(verified) : verified) as TokenPayload
+    if (!token) {
+      return NextResponse.json({
+        message: "Unauthorized",
+        success: false,
+      }, { status: 401 })
+    }
 
-        if (payload.id) {
-          createdBy = payload.id
-        } else if (payload.username) {
-          const creatorRes = await pool.query(
-            `SELECT id FROM users WHERE username = $1 LIMIT 1`,
-            [payload.username]
-          )
-          createdBy = creatorRes.rows[0]?.id ?? null
-        }
-      } catch {
-        createdBy = null
+    let createdBy: string
+
+    try {
+      const verified = jwt.verify(token, process.env.JWT_SECRET || "fallback_secret")
+      const payload = (typeof verified === "string" ? JSON.parse(verified) : verified) as TokenPayload
+
+      if (!payload.id || payload.role !== "admin") {
+        return NextResponse.json({
+          message: "Only admins can create users",
+          success: false,
+        }, { status: 403 })
       }
+
+      const creatorRes = await pool.query(
+        `SELECT id FROM users WHERE id = $1 AND role = 'admin' LIMIT 1`,
+        [payload.id]
+      )
+
+      if ((creatorRes.rowCount ?? 0) === 0) {
+        return NextResponse.json({
+          message: "Admin account not found",
+          success: false,
+        }, { status: 403 })
+      }
+
+      createdBy = creatorRes.rows[0].id
+    } catch {
+      return NextResponse.json({
+        message: "Invalid or expired token",
+        success: false,
+      }, { status: 401 })
     }
 
     if (role === "player") {
 
-      const { rows } = await pool.query(
+      const createdPlayerRes = await pool.query(
         `WITH new_user AS (
            INSERT INTO users (username, password, name, role, created_by)
            VALUES ($1, $2, $3, 'player', $6)
@@ -58,24 +92,40 @@ export async function POST(req: NextRequest) {
          new_player AS (
            INSERT INTO players (user_id, gender, category)
            SELECT id, $4, $5 FROM new_user
+           RETURNING user_id
          )
-         SELECT va.user_id, u.name
+         SELECT user_id
+         FROM new_player`,
+        [username, hashedPassword, name, gender, category, createdBy]
+      )
+
+      const createdPlayerId = createdPlayerRes.rows[0]?.user_id as string | undefined
+
+      if (!createdPlayerId) {
+        return NextResponse.json({
+          message: "Unable to create player",
+          success: false,
+        }, { status: 500 })
+      }
+
+      const assignedAnalystsRes = await pool.query(
+        `SELECT va.user_id, u.name
          FROM video_analysts va
          JOIN users u ON u.id = va.user_id
-         WHERE va.gender = $4 AND va.category = $5`,
-        [username, hashedPassword, name, gender, category, createdBy]
+         WHERE va.gender = $1 AND va.category = $2`,
+        [gender, category],
       )
 
       await s3Client.send(new PutObjectCommand({
         Bucket: process.env.S3_BUCKET_NAME || "cricket8759",
-        Key: `${name}/`,
+        Key: `${buildPlayerFolderName(name, createdPlayerId)}/`,
         Body: "",
       }))
 
       return NextResponse.json({
         message: "Player created",
         success: true,
-        assignedTo: rows,
+        assignedTo: assignedAnalystsRes.rows,
       }, { status: 201 })
 
     } else {

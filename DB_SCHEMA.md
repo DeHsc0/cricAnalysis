@@ -104,19 +104,14 @@ CREATE TABLE match_players (
 CREATE TABLE videos (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
-    -- which player this video belongs to / is visible to
     player_id       UUID NOT NULL REFERENCES players(user_id) ON DELETE CASCADE,
 
-    -- NULL for adhoc videos (only player_id is set)
     tournament_id   UUID REFERENCES tournaments(id) ON DELETE CASCADE,
     match_id        UUID REFERENCES matches(id) ON DELETE CASCADE,
 
     file_name       TEXT NOT NULL,
     file_type       TEXT NOT NULL,
 
-    -- S3 object key, e.g.
-    --   {playerId}/{tournamentId}/{matchId}/video.mp4   <- match video
-    --   {playerId}/adhoc/batting_session.mp4            <- adhoc video
     s3_key          TEXT NOT NULL UNIQUE,
 
     uploaded_by     UUID NOT NULL REFERENCES video_analysts(user_id) ON DELETE RESTRICT,
@@ -125,8 +120,8 @@ CREATE TABLE videos (
 
     -- application-level rules:
     --   if match_id IS NOT NULL → tournament_id must also be NOT NULL
-    --   if match_id IS NOT NULL → player must be present in match_players for that match
-    --   if match_id IS NULL     → video is adhoc for the player
+    --   if match_id IS NOT NULL → player must exist in match_players for that match
+    --   if match_id IS NULL     → adhoc video for the player
 );
 
 -- ================================

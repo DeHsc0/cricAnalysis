@@ -8,8 +8,6 @@ export async function POST(req: NextRequest) {
 
     const data = await req.json()
 
-    console.log(data)   
-
     const parsedData = loginSchema.safeParse(data);
 
     if (!parsedData.success) {
@@ -32,6 +30,24 @@ export async function POST(req: NextRequest) {
             );
 
             if (!player.rows[0]) {
+            return NextResponse.json(
+                {
+                    message: "User with this useranme dosent exist",
+                    success: false,
+                },
+                { status: 401 }
+            );
+        }
+
+            const verifyUser = await bcrypt.compare(password , player.rows[0].password)
+            
+            console.log("Input password:", password)
+            console.log("Stored hash:", player.rows[0].password)
+            console.log("Hash length:", player.rows[0].password?.length)
+            console.log("Compare result:", verifyUser)
+
+            if (!verifyUser) {
+
                 return NextResponse.json(
                     {
                         message: "Login credentials Failed",
@@ -41,15 +57,12 @@ export async function POST(req: NextRequest) {
                 );
             }
 
-            const verifyUser = await bcrypt.compare(password , player.rows[0].password)
-            
-
             const token = jwt.sign(
-                JSON.stringify({
+                {
                     id : player.rows[0].id,
                     username,
                     role : player.rows[0].role
-                }),
+                },
                 process.env.JWT_SECRET || "fallback_secret"
             );
 

@@ -2,7 +2,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import bcrypt from "bcryptjs"
 import { cn } from "@/lib/utils"
 
 type Role = "player" | "video_analyst"
@@ -64,6 +63,9 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
         category: "",
     })
     const [submitting, setSubmitting] = useState(false)
+    const [loggingOut, setLoggingOut] = useState(false)
+    const [deletingUserId, setDeletingUserId] = useState<string | null>(null)
+    const [overviewBanner, setOverviewBanner] = useState<{ ok: boolean; msg: string } | null>(null)
     const [submitResult, setSubmitResult] = useState<{ ok: boolean; msg: string } | null>(null)
     const [showPassword, setShowPassword] = useState(false)
 
@@ -99,6 +101,28 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
         void fetchUsers()
     }, [adminId])
 
+    const handleLogout = async () => {
+        setLoggingOut(true)
+
+        try {
+            const response = await fetch("/api/logout", {
+                method: "POST",
+            })
+
+            if (!response.ok) {
+                const payload = await response.json().catch(() => null)
+                throw new Error(payload?.message || "Failed to logout")
+            }
+
+            window.location.href = "/login"
+        } catch (error) {
+            const message = error instanceof Error ? error.message : "Failed to logout"
+            setUsersError(message)
+            setSubmitResult({ ok: false, msg: message })
+            setLoggingOut(false)
+        }
+    }
+
     const handleChange = (field: keyof FormState, value: string) => {
         setForm((prev) => {
             const next = { ...prev, [field]: value }
@@ -114,9 +138,6 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
         setSubmitResult(null)
 
         try {
-
-            const hashedPassword = await bcrypt.hash(form.password , 12)
-
             const response = await fetch("/api/admin/create_user", {
                 method: "POST",
                 headers: {
@@ -124,7 +145,7 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
                 },
                 body: JSON.stringify({
                     username: form.username,
-                    password: hashedPassword,
+                    password: form.password,
                     name: form.name,
                     role: form.role,
                     gender: form.gender,
@@ -155,6 +176,50 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
         }
     }
 
+    const handleDeleteUser = async (user: User) => {
+        setOverviewBanner(null)
+
+        const warning =
+            user.role === "player"
+                ? `Delete ${user.name}? This will also delete the player's CDN folder (playerName_databaseId) and all videos mapped to this player.`
+                : `Delete ${user.name}? This will also delete tournaments and matches created by this analyst, related videos, and CDN content.`
+
+        const confirmed = window.confirm(warning)
+        if (!confirmed) return
+
+        setDeletingUserId(user.id)
+
+        try {
+            const response = await fetch("/api/admin/delete_user", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ userId: user.id }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok || !data?.success) {
+                throw new Error(data?.message || "Failed to delete user")
+            }
+
+            await fetchUsers()
+
+            setOverviewBanner({
+                ok: true,
+                msg: data?.message || `${user.name} deleted successfully.`,
+            })
+        } catch (error) {
+            setOverviewBanner({
+                ok: false,
+                msg: error instanceof Error ? error.message : "Failed to delete user",
+            })
+        } finally {
+            setDeletingUserId(null)
+        }
+    }
+
     const filtered = filterRole === "all" ? users : users.filter((u) => u.role === filterRole)
     const playerCount = users.filter((u) => u.role === "player").length
     const analystCount = users.filter((u) => u.role === "video_analyst").length
@@ -172,9 +237,19 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
                             User Management
                         </h1>
                     </div>
-                    <div className="inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-4 py-2 text-[13px] font-semibold text-blue-200">
-                        <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]" />
-                        Admin
+                    <div className="flex items-center gap-2">
+                        <div className="inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-4 py-2 text-[13px] font-semibold text-blue-200">
+                            <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]" />
+                            Admin
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => void handleLogout()}
+                            disabled={loggingOut}
+                            className="rounded-lg border border-red-400/30 bg-red-500/10 px-4 py-2 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                            {loggingOut ? "Logging out..." : "Logout"}
+                        </button>
                     </div>
                 </header>
 
@@ -239,6 +314,19 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
                             </div>
                         </div>
 
+                        {overviewBanner && (
+                            <div
+                                className={cn(
+                                    "mb-4 rounded-[10px] border px-4 py-3 text-sm font-semibold",
+                                    overviewBanner.ok
+                                        ? "border-green-400/30 bg-green-500/10 text-green-300"
+                                        : "border-red-400/30 bg-red-500/10 text-red-300",
+                                )}
+                            >
+                                {overviewBanner.ok ? "✓" : "✗"} {overviewBanner.msg}
+                            </div>
+                        )}
+
                         {loadingUsers ? (
                             <div className="flex items-center justify-center py-[60px]">
                                 <p className="text-gray-500">Loading users...</p>
@@ -263,7 +351,7 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
                                 <table className="w-full border-collapse">
                                     <thead>
                                         <tr>
-                                            {["Name", "Username", "Role", "Gender", "Category", "Created"].map((h) => (
+                                            {["Name", "Username", "Role", "Gender", "Category", "Created", "Actions"].map((h) => (
                                                 <th
                                                     key={h}
                                                     className="whitespace-nowrap border-b border-white/10 bg-black/20 px-4 py-3 text-left text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500"
@@ -306,6 +394,16 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
                                                 </td>
                                                 <td className="whitespace-nowrap border-b border-white/[0.04] px-4 py-[13px] text-xs text-gray-500">
                                                     {formatDate(u.created_at)}
+                                                </td>
+                                                <td className="whitespace-nowrap border-b border-white/[0.04] px-4 py-[13px] text-xs text-gray-500">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void handleDeleteUser(u)}
+                                                        disabled={deletingUserId === u.id}
+                                                        className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    >
+                                                        {deletingUserId === u.id ? "Deleting..." : "Delete"}
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}

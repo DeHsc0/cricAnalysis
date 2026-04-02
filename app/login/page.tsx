@@ -25,10 +25,6 @@ export default function LoginPage () {
     }) => {
 
         setLoading(true)
-        
-        const  hashedPassword = await bcrypt.hash(data.password , 12)
-
-        console.log(hashedPassword)
 
         const response = await fetch("/api/login", {
             method: "POST",
@@ -37,13 +33,19 @@ export default function LoginPage () {
             },
             body: JSON.stringify({
                 username: data.username,
-                password: hashedPassword,
+                password: data.password,
             }),
         });
 
         const responseData = await response.json()
 
-        if(response.status !== 200 )return toast(responseData.message)
+        if(response.status !== 200 ){
+
+            toast(responseData.message)
+            setLoading(false)       
+            return
+
+        }
 
         toast("Login Successfull")
         
@@ -111,7 +113,7 @@ export default function LoginPage () {
 
                         </div>
                         
-                        <button type="submit" className="w-full p-3 bg-linear-to-br from-blue-400 to-blue-500 text-white border-0 rounded-[10px] [font-family:var(--font)] text-base font-semibold cursor-pointer transition-all duration-300 ease-in-out flex justify-center items-center shadow-[0_4px_12px_rgba(59,130,246,0.3)] mt-1 hover:from-blue-500 hover:to-blue-600 hover:-translate-y-0.5 hover:shadow-[0_6px_20px_rgba(59,130,246,0.4)] active:translate-y-0">
+                        <button type="submit" className="w-full p-3 bg-linear-to-br from-blue-400 to-blue-500 text-white border-0 rounded-[10px] [font-family:var(--font)] text-base font-semibold cursor-pointer transition-all duration-300 ease-in-out flex justify-center items-center shadow-[0_4px_12px_rgba(59,130,246,0.3)] mt-1 hover:from-blue-500 hover:to-blue-600 " disabled={loading}>
 
                             { loading ? <Loader className="animate-spin text-white" /> : <p>Login</p>   }
 

@@ -1,6 +1,5 @@
 import pool from "@/lib/db";
 import { createMatchSchema } from "@/types/zod";
-import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST ( req : NextRequest) {
