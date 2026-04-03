@@ -59,6 +59,15 @@ const formatDate = (iso: string) =>
     year: "numeric",
   });
 
+const formatDateTime = (iso: string) =>
+  new Date(iso).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
 interface PlayerPageClientProps {
   playerId: string;
 }
@@ -80,6 +89,9 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
     src: "",
   });
 
+  const playerDisplayName =
+    data?.player?.name?.trim() || data?.player?.username?.trim() || "Player";
+
   const tournaments = data?.tournaments ?? [];
 
   const selectedTournament = useMemo(
@@ -95,6 +107,37 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
   );
 
   const videos = selectedMatch?.videos ?? [];
+
+  const totalMatches = useMemo(
+    () => tournaments.reduce((sum, tournament) => sum + tournament.matches.length, 0),
+    [tournaments],
+  );
+
+  const totalVideos = useMemo(
+    () => tournaments.reduce(
+      (sum, tournament) =>
+        sum + tournament.matches.reduce((inner, match) => inner + match.videos.length, 0),
+      0,
+    ),
+    [tournaments],
+  );
+
+  const latestVideo = useMemo(() => {
+    const allVideos = tournaments.flatMap((tournament) =>
+      tournament.matches.flatMap((match) => match.videos),
+    );
+
+    if (allVideos.length === 0) return null;
+
+    return [...allVideos].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )[0];
+  }, [tournaments]);
+
+  const goBackToTournaments = () => {
+    setSelectedTournamentId("");
+    setSelectedMatchId("");
+  };
 
   const fetchPlayerDashboard = async () => {
     setLoading(true);
@@ -237,10 +280,11 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
       <div className="relative mx-auto max-w-275 px-6 pb-20 pt-10">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.15em] text-blue-500">Player</p>
+            <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.12em] text-blue-400">Dashboard</p>
             <h1 className="m-0 bg-[linear-gradient(135deg,#ffffff_0%,#94a3b8_100%)] bg-clip-text text-3xl font-bold tracking-[-0.02em] text-transparent md:text-[32px]">
-              Video Library
+              {playerDisplayName}
             </h1>
+            <p className="mt-1 text-sm text-slate-400">Video Library Dashboard</p>
           </div>
           <div className="flex items-center gap-2">
             <div className="inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-4 py-2 text-[13px] font-semibold text-blue-200">
@@ -258,70 +302,84 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
           </div>
         </header>
 
-        <section className="rounded-[18px] border border-white/10 bg-slate-950/75 p-5 backdrop-blur-2xl">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-gray-400">
-                {selectedTournamentId ? (selectedMatchId ? "Videos" : "Matches") : "Tournaments"}
+        <section className="mb-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            { label: "Tournaments", value: tournaments.length, icon: "🏆" },
+            { label: "Matches", value: totalMatches, icon: "📌" },
+            { label: "Videos", value: totalVideos, icon: "🎥" },
+            {
+              label: "Latest Upload",
+              value: latestVideo ? formatDate(latestVideo.created_at) : "-",
+              icon: "🕒",
+            },
+          ].map((card) => (
+            <div
+              key={card.label}
+              className="rounded-[14px] border border-white/10 bg-slate-950/70 px-5 py-4 backdrop-blur-xl"
+            >
+              <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-slate-400">
+                {card.icon} {card.label}
               </p>
-              <p className="mt-1 text-xs text-slate-500">
-                {selectedTournamentId
-                  ? selectedMatchId
-                    ? `${selectedTournament?.name ?? "Tournament"} / ${selectedMatch?.name ?? "Match"}`
-                    : `${selectedTournament?.name ?? "Tournament"}`
-                  : "Open a tournament folder to continue"}
-              </p>
+              <p className="mt-2 text-2xl font-bold text-slate-100">{card.value}</p>
+            </div>
+          ))}
+        </section>
+
+        {!selectedTournamentId && (
+          <section className="rounded-[18px] border border-white/10 bg-slate-950/75 p-5 backdrop-blur-2xl">
+            <div className="mb-4">
+              <h2 className="text-lg font-semibold text-slate-100">Your Tournaments</h2>
             </div>
 
-            <div className="flex items-center gap-2">
-              {selectedTournamentId && selectedMatchId && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedMatchId("")}
-                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
-                >
-                  Back to matches
-                </button>
-              )}
-
-              {selectedTournamentId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedTournamentId("");
-                    setSelectedMatchId("");
-                  }}
-                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
-                >
-                  Back to tournaments
-                </button>
-              )}
-            </div>
-          </div>
-
-          {!selectedTournamentId ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {tournaments.length === 0 ? (
                 <p className="text-sm text-slate-500">No tournaments found.</p>
               ) : (
-                tournaments.map((tournament) => (
-                  <button
-                    key={tournament.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedTournamentId(tournament.id);
-                      setSelectedMatchId("");
-                    }}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-left text-slate-300 transition hover:border-white/20"
-                  >
-                    <p className="text-sm font-semibold text-slate-100">Folder: {tournament.name}</p>
-                    <p className="mt-1 text-xs text-slate-400">{tournament.matches.length} match(es)</p>
-                  </button>
-                ))
+                tournaments.map((tournament) => {
+                  const tournamentVideoCount = tournament.matches.reduce(
+                    (sum, match) => sum + match.videos.length,
+                    0,
+                  );
+
+                  return (
+                    <button
+                      key={tournament.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedTournamentId(tournament.id);
+                        setSelectedMatchId("");
+                      }}
+                      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-left text-slate-300 transition hover:border-white/20"
+                    >
+                      <p className="text-base font-semibold text-slate-100">{tournament.name}</p>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {tournament.matches.length} match(es) • {tournamentVideoCount} video(s)
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">Created: {formatDate(tournament.created_at)}</p>
+                    </button>
+                  );
+                })
               )}
             </div>
-          ) : !selectedMatchId ? (
-            <div className="space-y-2">
+          </section>
+        )}
+
+        {selectedTournamentId && !selectedMatchId && selectedTournament && (
+          <section className="rounded-[18px] border border-white/10 bg-slate-950/75 p-5 backdrop-blur-2xl">
+            <div className="mb-4">
+              <div className="mb-3 flex justify-start">
+                <button
+                  type="button"
+                  onClick={goBackToTournaments}
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
+                >
+                  Back To Tournaments
+                </button>
+              </div>
+              <h2 className="mt-1 text-lg font-semibold text-slate-100">Matches In {selectedTournament.name}</h2>
+            </div>
+
+            <div className="space-y-3">
               {matches.length === 0 ? (
                 <p className="text-sm text-slate-500">No matches found in this tournament.</p>
               ) : (
@@ -330,36 +388,59 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
                     key={match.id}
                     type="button"
                     onClick={() => setSelectedMatchId(match.id)}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-left text-slate-300 transition hover:border-white/20"
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-left text-slate-300 transition hover:border-white/20"
                   >
-                    <p className="text-sm font-semibold text-slate-100">Match: {match.name}</p>
+                    <p className="text-base font-semibold text-slate-100">{match.name}</p>
                     <p className="mt-1 text-xs text-slate-400">
-                      {match.videos.length} video(s) - {formatDate(match.created_at)}
+                      {match.videos.length} video(s)
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">Created: {formatDate(match.created_at)}</p>
+                  </button>
+                ))
+              )}
+            </div>
+          </section>
+        )}
+
+        {selectedMatchId && selectedTournament && selectedMatch && (
+          <section className="rounded-[18px] border border-white/10 bg-slate-950/75 p-5 backdrop-blur-2xl">
+            <div className="mb-4">
+              <div className="mb-3 flex justify-start">
+                <button
+                  type="button"
+                  onClick={goBackToTournaments}
+                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
+                >
+                  Back To Tournaments
+                </button>
+              </div>
+              <h2 className="mt-1 text-lg font-semibold text-slate-100">Videos In {selectedMatch.name}</h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Tournament: {selectedTournament.name}
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {videos.length === 0 ? (
+                <p className="text-sm text-slate-500">No videos found for this match.</p>
+              ) : (
+                videos.map((video, index) => (
+                  <button
+                    key={video.id}
+                    type="button"
+                    onClick={() => void openVideo(video)}
+                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-left text-slate-300 transition hover:border-white/20"
+                  >
+                    <p className="text-base font-semibold text-slate-100">Video {index + 1}: {video.file_name}</p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Uploaded: {formatDateTime(video.created_at)}
                     </p>
                   </button>
                 ))
               )}
             </div>
-          ) : (
-            <div className="space-y-2">
-              {videos.length === 0 ? (
-                <p className="text-sm text-slate-500">No videos found for this match.</p>
-              ) : (
-                videos.map((video) => (
-                  <button
-                    key={video.id}
-                    type="button"
-                    onClick={() => void openVideo(video)}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-left text-slate-300 transition hover:border-white/20"
-                  >
-                    <p className="text-sm font-semibold text-slate-100">Video: {video.file_name}</p>
-                    <p className="mt-1 text-xs text-slate-400">{formatDate(video.created_at)}</p>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </section>
+          </section>
+        )}
       </div>
 
       {videoModal.open && (
@@ -382,7 +463,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
             <div className="rounded-xl border border-white/10 bg-black/40 p-3">
               {videoModal.loading ? (
                 <div className="flex h-90 items-center justify-center text-sm text-slate-400">
-                  Fetching video from S3...
+                  Fetching video...
                 </div>
               ) : videoModal.error ? (
                 <div className="flex h-90 items-center justify-center text-sm text-red-300">

@@ -60,6 +60,20 @@ async function resolveAnalystId(payload: TokenPayload): Promise<string | null> {
   return userRes.rows[0]?.id ?? null
 }
 
+function sanitizePathSegment(value: string): string {
+  const cleaned = value
+    .replace(/[\\/]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/[^a-zA-Z0-9 ._-]/g, "")
+    .trim()
+
+  return cleaned.length > 0 ? cleaned : "untitled"
+}
+
+function buildPlayerFolderSegment(playerName: string, playerId: string): string {
+  return `${sanitizePathSegment(playerName)}_${playerId}`
+}
+
 export async function POST(req: NextRequest) {
   const payload = getTokenPayload(req)
 
@@ -115,14 +129,30 @@ export async function POST(req: NextRequest) {
     const playerIds = Array.from(new Set(videos.map((v) => v.playerId)))
 
     const playersRes = await pool.query(
-      `SELECT user_id, gender, category
-       FROM players
-       WHERE user_id = ANY($1::uuid[])`,
+      `SELECT
+         p.user_id,
+         p.gender,
+         p.category,
+         u.name AS player_name
+       FROM players p
+       JOIN users u ON u.id = p.user_id
+       WHERE p.user_id = ANY($1::uuid[])`,
       [playerIds],
     )
 
-    const playersById = new Map<string, { gender: string; category: string }>(
-      playersRes.rows.map((row) => [row.user_id as string, { gender: row.gender as string, category: row.category as string }]),
+    const playersById = new Map<string, { gender: string; category: string; folderSegment: string }>(
+      playersRes.rows.map((row) => {
+        const playerId = row.user_id as string
+
+        return [
+          playerId,
+          {
+            gender: row.gender as string,
+            category: row.category as string,
+            folderSegment: buildPlayerFolderSegment(String(row.player_name), playerId),
+          },
+        ]
+      }),
     )
 
     const missingPlayerIds = playerIds.filter((id) => !playersById.has(id))
@@ -151,6 +181,53 @@ export async function POST(req: NextRequest) {
     }
 
     const videosWithMatch = videos.filter((v) => Boolean(v.matchId && v.tournamentId))
+    const adhocVideos = videos.filter((video) => !video.matchId && !video.tournamentId)
+
+    if (videosWithMatch.length > 0 && adhocVideos.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Do not mix match uploads with adhoc uploads in the same request",
+        },
+        { status: 422 },
+      )
+    }
+
+    if (adhocVideos.length > 0) {
+      const adhocPlayerIds = new Set(adhocVideos.map((video) => video.playerId))
+
+      if (adhocPlayerIds.size > 1) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Adhoc upload batch can include videos for only one player",
+          },
+          { status: 422 },
+        )
+      }
+
+      const invalidAdhocKeys = adhocVideos.filter((video) => {
+        const player = playersById.get(video.playerId)
+        if (!player) return true
+
+        const expectedPrefix = `${player.folderSegment}/adhoc/`
+        return !video.s3Key.startsWith(expectedPrefix)
+      })
+
+      if (invalidAdhocKeys.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Some adhoc videos have invalid storage key paths",
+            invalid: invalidAdhocKeys.map((video) => ({
+              playerId: video.playerId,
+              s3Key: video.s3Key,
+            })),
+          },
+          { status: 422 },
+        )
+      }
+    }
 
     if (videosWithMatch.length > 0) {
       const matchIds = Array.from(new Set(videosWithMatch.map((v) => v.matchId).filter((id): id is string => Boolean(id))))

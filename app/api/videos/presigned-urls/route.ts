@@ -81,16 +81,6 @@ function buildUniqueFileName(fileName: string): string {
   return `${Date.now()}_${crypto.randomUUID()}_${safeName}`
 }
 
-function buildS3Key(video: z.infer<typeof videoMetaSchema>): string {
-  const uniqueName = buildUniqueFileName(video.fileName)
-
-  if (video.matchId && video.tournamentId) {
-    return `${video.playerId}/${video.tournamentId}/${video.matchId}/${uniqueName}`
-  }
-
-  return `${video.playerId}/adhoc/${uniqueName}`
-}
-
 export async function POST(req: NextRequest) {
   const analyst = getAnalystFromToken(req)
 
@@ -139,8 +129,34 @@ export async function POST(req: NextRequest) {
       ): video is z.infer<typeof videoMetaSchema> & { matchId: string; tournamentId: string } =>
         Boolean(video.matchId && video.tournamentId),
     )
+    const adhocVideos = videos.filter((video) => !video.matchId && !video.tournamentId)
+
+    if (videosWithMatch.length > 0 && adhocVideos.length > 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          message: "Do not mix match uploads with adhoc uploads in the same request",
+        },
+        { status: 422 },
+      )
+    }
+
+    if (adhocVideos.length > 0) {
+      const adhocPlayerIds = new Set(adhocVideos.map((video) => video.playerId))
+
+      if (adhocPlayerIds.size > 1) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Adhoc upload batch can include videos for only one player",
+          },
+          { status: 422 },
+        )
+      }
+    }
 
     const playerFolderByMatchAndId = new Map<string, string>()
+    const adhocPlayerFolderById = new Map<string, string>()
     const matchMetaById = new Map<string, { match_name: string; tournament_id: string; tournament_name: string }>()
 
     if (videosWithMatch.length > 0) {
@@ -279,6 +295,42 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (adhocVideos.length > 0) {
+      const adhocPlayerIds = Array.from(new Set(adhocVideos.map((video) => video.playerId)))
+
+      const adhocPlayersRes = await pool.query(
+        `SELECT
+           p.user_id AS player_id,
+           u.name AS player_name
+         FROM players p
+         JOIN users u ON u.id = p.user_id
+         WHERE p.user_id = ANY($1::uuid[])`,
+        [adhocPlayerIds],
+      )
+
+      const foundPlayerIds = new Set(adhocPlayersRes.rows.map((row) => String(row.player_id)))
+      const missingPlayerIds = adhocPlayerIds.filter((id) => !foundPlayerIds.has(id))
+
+      if (missingPlayerIds.length > 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Some players do not exist",
+            missingPlayerIds,
+          },
+          { status: 404 },
+        )
+      }
+
+      for (const row of adhocPlayersRes.rows) {
+        const playerId = String(row.player_id)
+        adhocPlayerFolderById.set(
+          playerId,
+          buildPlayerFolderSegment(String(row.player_name), playerId),
+        )
+      }
+    }
+
     const ensuredPrefixes = new Set<string>()
 
     async function ensureFolderPrefix(prefix: string) {
@@ -307,7 +359,7 @@ export async function POST(req: NextRequest) {
 
     const signedVideos = await Promise.all(
       videos.map(async (video) => {
-        let s3Key = buildS3Key(video)
+        let s3Key: string
 
         if (video.matchId && video.tournamentId) {
           const metadata = matchMetaById.get(video.matchId)
@@ -318,6 +370,18 @@ export async function POST(req: NextRequest) {
           }
 
           const folderPrefix = `${playerFolderSegment}/${sanitizePathSegment(metadata.tournament_name)}/${sanitizePathSegment(metadata.match_name)}/`
+
+          await ensureFolderPrefix(folderPrefix)
+
+          s3Key = `${folderPrefix}${buildUniqueFileName(video.fileName)}`
+        } else {
+          const playerFolderSegment = adhocPlayerFolderById.get(video.playerId)
+
+          if (!playerFolderSegment) {
+            throw new Error("Unable to resolve adhoc player folder details")
+          }
+
+          const folderPrefix = `${playerFolderSegment}/adhoc/`
 
           await ensureFolderPrefix(folderPrefix)
 

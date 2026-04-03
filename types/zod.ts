@@ -40,7 +40,7 @@ const loginSchema = z.object({
 const createTournamentSchema = z.discriminatedUnion("gender" , [
     z.object({
 
-        name : z.string(),
+        name : z.string().trim().min(1, "Tournament name is required"),
         analystId : z.string(),
         gender : z.literal("men"),
         category : MenCategory
@@ -48,7 +48,7 @@ const createTournamentSchema = z.discriminatedUnion("gender" , [
     }),
     z.object({
 
-        name : z.string(),
+        name : z.string().trim().min(1, "Tournament name is required"),
         analystId : z.string(),
         gender : z.literal("women"),
         category : WomenCategory
@@ -60,7 +60,7 @@ const createTournamentSchema = z.discriminatedUnion("gender" , [
 const createMatchSchema = z.object({
 
     tournamentId : z.string(),
-    name : z.string()
+    name : z.string().trim().min(1, "Match name is required")
 
 })
 

@@ -27,6 +27,15 @@ interface FormState {
     category: Category | ""
 }
 
+interface EditFormState {
+    username: string
+    password: string
+    name: string
+    role: Role
+    gender: Gender
+    category: Category | ""
+}
+
 const MEN_CATEGORIES = ["under_14", "under_16", "under_19", "under_23", "ranji"] as const
 const WOMEN_CATEGORIES = ["under_16", "under_19", "under_23", "senior"] as const
 
@@ -68,8 +77,21 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
     const [overviewBanner, setOverviewBanner] = useState<{ ok: boolean; msg: string } | null>(null)
     const [submitResult, setSubmitResult] = useState<{ ok: boolean; msg: string } | null>(null)
     const [showPassword, setShowPassword] = useState(false)
+    const [editModalOpen, setEditModalOpen] = useState(false)
+    const [editingUser, setEditingUser] = useState<User | null>(null)
+    const [editSubmitting, setEditSubmitting] = useState(false)
+    const [showEditPassword, setShowEditPassword] = useState(false)
+    const [editForm, setEditForm] = useState<EditFormState>({
+        username: "",
+        password: "",
+        name: "",
+        role: "player",
+        gender: "men",
+        category: "",
+    })
 
     const categories = form.gender === "men" ? MEN_CATEGORIES : WOMEN_CATEGORIES
+    const editCategories = editForm.gender === "men" ? MEN_CATEGORIES : WOMEN_CATEGORIES
 
     const fetchUsers = async () => {
         setLoadingUsers(true)
@@ -129,6 +151,111 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
             if (field === "gender") next.category = ""
             return next
         })
+    }
+
+    const handleEditChange = (field: keyof EditFormState, value: string) => {
+        setEditForm((prev) => {
+            const next = { ...prev, [field]: value }
+            if (field === "gender") next.category = ""
+            return next
+        })
+    }
+
+    const openEditModal = (user: User) => {
+        setEditingUser(user)
+        setEditForm({
+            username: user.username,
+            password: "",
+            name: user.name,
+            role: user.role,
+            gender: user.gender ?? "men",
+            category: user.category ?? "",
+        })
+        setShowEditPassword(false)
+        setEditModalOpen(true)
+        setOverviewBanner(null)
+    }
+
+    const closeEditModal = () => {
+        setEditModalOpen(false)
+        setEditingUser(null)
+        setEditForm({
+            username: "",
+            password: "",
+            name: "",
+            role: "player",
+            gender: "men",
+            category: "",
+        })
+        setShowEditPassword(false)
+        setEditSubmitting(false)
+    }
+
+    const handleEditUser = async (e: React.FormEvent) => {
+        e.preventDefault()
+
+        if (!editingUser) return
+
+        if (!editForm.category) {
+            setOverviewBanner({ ok: false, msg: "Please select a category." })
+            return
+        }
+
+        if (editingUser.role !== editForm.role) {
+            const roleSwitchWarning =
+                editingUser.role === "player"
+                    ? `Change ${editingUser.name} from player to video analyst? This will delete the player's CDN folder and player video links before role conversion.`
+                    : `Change ${editingUser.name} from video analyst to player? This only works if the analyst has no tournaments and no uploaded videos.`
+
+            const confirmed = window.confirm(roleSwitchWarning)
+            if (!confirmed) return
+        }
+
+        setEditSubmitting(true)
+        setOverviewBanner(null)
+
+        try {
+            const payload: Record<string, unknown> = {
+                userId: editingUser.id,
+                username: editForm.username.trim(),
+                name: editForm.name.trim(),
+                role: editForm.role,
+                gender: editForm.gender,
+                category: editForm.category,
+            }
+
+            const trimmedPassword = editForm.password.trim()
+            if (trimmedPassword.length > 0) {
+                payload.password = trimmedPassword
+            }
+
+            const response = await fetch("/api/admin/edit_user", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok || !data?.success) {
+                throw new Error(data?.message || "Failed to update user")
+            }
+
+            await fetchUsers()
+            closeEditModal()
+            setOverviewBanner({
+                ok: true,
+                msg: data?.message || `${editForm.name} updated successfully.`,
+            })
+        } catch (error) {
+            setOverviewBanner({
+                ok: false,
+                msg: error instanceof Error ? error.message : "Failed to update user",
+            })
+            setEditSubmitting(false)
+        }
     }
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -398,6 +525,14 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
                                                 <td className="whitespace-nowrap border-b border-white/[0.04] px-4 py-[13px] text-xs text-gray-500">
                                                     <button
                                                         type="button"
+                                                        onClick={() => openEditModal(u)}
+                                                        disabled={deletingUserId === u.id}
+                                                        className="mr-2 rounded-lg border border-blue-400/30 bg-blue-500/10 px-3 py-1.5 text-xs font-semibold text-blue-200 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        type="button"
                                                         onClick={() => void handleDeleteUser(u)}
                                                         disabled={deletingUserId === u.id}
                                                         className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-60"
@@ -550,6 +685,165 @@ export default function AdminPageClient({ adminId }: AdminPageClientProps) {
                                 {submitting ? "Creating..." : `Create ${form.role === "player" ? "Player" : "Video Analyst"}`}
                             </button>
                         </form>
+                    </div>
+                )}
+
+                {editModalOpen && editingUser && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+                        <div className="max-h-[90vh] w-full max-w-3xl overflow-auto rounded-2xl border border-white/10 bg-slate-950 p-6 shadow-2xl">
+                            <div className="mb-5 flex items-start justify-between gap-4">
+                                <div>
+                                    <p className="text-base font-semibold text-slate-100">Edit User</p>
+                                    <p className="mt-1 text-xs text-slate-400">
+                                        @{editingUser.username} • {editingUser.role === "player" ? "Player" : "Video Analyst"}
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={closeEditModal}
+                                    className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
+                                >
+                                    Close
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleEditUser} className="flex flex-col gap-5">
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500">Full Name</label>
+                                        <input
+                                            className={inputClass}
+                                            value={editForm.name}
+                                            onChange={(e) => handleEditChange("name", e.target.value)}
+                                            required
+                                            disabled={editSubmitting}
+                                        />
+                                    </div>
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500">Username</label>
+                                        <input
+                                            className={inputClass}
+                                            value={editForm.username}
+                                            onChange={(e) => handleEditChange("username", e.target.value)}
+                                            required
+                                            disabled={editSubmitting}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500">New Password (Optional)</label>
+                                    <div className="relative">
+                                        <input
+                                            className={cn(inputClass, "pr-11")}
+                                            type={showEditPassword ? "text" : "password"}
+                                            placeholder="Leave empty to keep current password"
+                                            value={editForm.password}
+                                            onChange={(e) => handleEditChange("password", e.target.value)}
+                                            minLength={8}
+                                            disabled={editSubmitting}
+                                        />
+                                        <button
+                                            type="button"
+                                            className="absolute right-3 top-1/2 -translate-y-1/2 p-0 text-base"
+                                            onClick={() => setShowEditPassword((p) => !p)}
+                                        >
+                                            {showEditPassword ? "🙈" : "👁"}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500">Role</label>
+                                        <div className="flex gap-1.5">
+                                            {(["player", "video_analyst"] as Role[]).map((r) => (
+                                                <button
+                                                    key={r}
+                                                    type="button"
+                                                    onClick={() => handleEditChange("role", r)}
+                                                    disabled={editSubmitting}
+                                                    className={cn(
+                                                        "flex-1 rounded-[9px] border border-white/10 bg-black/20 px-2 py-2.5 text-center text-sm font-semibold transition",
+                                                        editForm.role === r
+                                                            ? "border-blue-400/40 bg-blue-500/15 text-blue-200"
+                                                            : "text-gray-400 hover:text-gray-300",
+                                                    )}
+                                                >
+                                                    {r === "player" ? "🏏 Player" : "🎬 Analyst"}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-2">
+                                        <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500">Gender</label>
+                                        <div className="flex gap-1.5">
+                                            {(["men", "women"] as Gender[]).map((g) => (
+                                                <button
+                                                    key={g}
+                                                    type="button"
+                                                    onClick={() => handleEditChange("gender", g)}
+                                                    disabled={editSubmitting}
+                                                    className={cn(
+                                                        "flex-1 rounded-[9px] border border-white/10 bg-black/20 px-2 py-2.5 text-center text-sm font-semibold capitalize transition",
+                                                        editForm.gender === g
+                                                            ? "border-blue-400/40 bg-blue-500/15 text-blue-200"
+                                                            : "text-gray-400 hover:text-gray-300",
+                                                    )}
+                                                >
+                                                    {g}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-2">
+                                    <label className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-500">Category</label>
+                                    <div className="flex flex-wrap gap-2">
+                                        {editCategories.map((cat) => (
+                                            <button
+                                                key={cat}
+                                                type="button"
+                                                onClick={() => handleEditChange("category", cat)}
+                                                disabled={editSubmitting}
+                                                className={cn(
+                                                    "rounded-[9px] border border-white/10 bg-black/20 px-[18px] py-[9px] text-sm font-semibold transition",
+                                                    editForm.category === cat
+                                                        ? "border-blue-500/50 bg-blue-500/20 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.2)]"
+                                                        : "text-gray-400 hover:text-gray-300",
+                                                )}
+                                            >
+                                                {formatCategory(cat)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <p className="rounded-lg border border-yellow-400/20 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-200">
+                                    Role changes can trigger cleanup logic. Player to analyst conversion removes the player CDN folder and mapped player videos.
+                                </p>
+
+                                <div className="flex items-center justify-end gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={closeEditModal}
+                                        disabled={editSubmitting}
+                                        className="rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={editSubmitting || !editForm.category}
+                                        className="rounded-lg bg-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-200 transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {editSubmitting ? "Saving..." : "Save Changes"}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                 )}
             </div>

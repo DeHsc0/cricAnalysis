@@ -14,7 +14,7 @@ export async function POST ( req : NextRequest) {
         error : parsedData.error?.flatten(),
         success : false
 
-    })
+    } , { status : 400 })
 
     const { analystId , gender , category , name } = parsedData.data
 

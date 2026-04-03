@@ -9,7 +9,7 @@ import { createMatchSchema, createTournamentSchema } from "@/types/zod"
 
 type Gender = "men" | "women"
 type Category = "under_14" | "under_16" | "under_19" | "under_23" | "ranji" | "senior"
-type DashboardTab = "overview" | "tournaments" | "matches" | "access"
+type DashboardTab = "overview" | "tournaments" | "matches" | "access" | "adhoc"
 
 type Player = {
   id: string
@@ -24,6 +24,8 @@ type UploadedVideo = {
   player_id: string
   player_name: string
   player_username: string
+  tournament_id?: string | null
+  match_id?: string | null
   file_name: string
   file_type: string
   s3_key: string
@@ -123,6 +125,10 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
   const [uploadModalDragging, setUploadModalDragging] = useState(false)
   const [uploadProgressLabel, setUploadProgressLabel] = useState<string | null>(null)
   const [uploadTargetPlayerIds, setUploadTargetPlayerIds] = useState<string[]>([])
+  const [adhocPlayerId, setAdhocPlayerId] = useState("")
+  const [adhocPendingVideos, setAdhocPendingVideos] = useState<PendingVideo[]>([])
+  const [adhocDragging, setAdhocDragging] = useState(false)
+  const [adhocProgressLabel, setAdhocProgressLabel] = useState<string | null>(null)
   const [accessModalOpen, setAccessModalOpen] = useState(false)
   const [accessModalMatchId, setAccessModalMatchId] = useState<string | null>(null)
   const [accessModalMatchTitle, setAccessModalMatchTitle] = useState("")
@@ -195,6 +201,21 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
     return matchesWithTournament.find((match) => match.id === uploadModalMatchId) ?? null
   }, [matchesWithTournament, uploadModalMatchId])
 
+  const adhocUploadedVideos = useMemo(
+    () => (data?.uploaded_videos ?? []).filter((video) => !video.match_id && !video.tournament_id),
+    [data?.uploaded_videos],
+  )
+
+  const selectedAdhocPlayer = useMemo(
+    () => playersSamePool.find((player) => player.id === adhocPlayerId) ?? null,
+    [adhocPlayerId, playersSamePool],
+  )
+
+  const adhocVideosForSelectedPlayer = useMemo(() => {
+    if (!adhocPlayerId) return adhocUploadedVideos
+    return adhocUploadedVideos.filter((video) => video.player_id === adhocPlayerId)
+  }, [adhocPlayerId, adhocUploadedVideos])
+
   const fetchAnalystData = async () => {
     setLoading(true)
     setError(null)
@@ -219,6 +240,7 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
 
       const nextTournaments = payload.tournaments ?? []
       const nextMatches = nextTournaments.flatMap((t) => t.matches ?? [])
+      const nextPlayersPool = payload.players_same_gender_category ?? []
 
       if (nextTournaments.length > 0) {
         setSelectedTournamentId((prev) =>
@@ -250,6 +272,14 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
         nextViewerDraft[match.id] = (match.players ?? []).map((player) => player.id)
       }
       setViewerDraftByMatch(nextViewerDraft)
+
+      if (nextPlayersPool.length > 0) {
+        setAdhocPlayerId((prev) =>
+          nextPlayersPool.some((player) => player.id === prev) ? prev : nextPlayersPool[0].id,
+        )
+      } else {
+        setAdhocPlayerId("")
+      }
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Unable to load data")
       setData(null)
@@ -686,6 +716,88 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
     }
   }
 
+  const queueAdhocVideos = (files: File[]) => {
+    const onlyVideos = files.filter((file) => file.type.startsWith("video/"))
+
+    if (onlyVideos.length === 0) {
+      setBanner({ ok: false, msg: "Please select video files only." })
+      return
+    }
+
+    const queued: PendingVideo[] = onlyVideos.map((file) => ({
+      id: crypto.randomUUID(),
+      file,
+      fileName: file.name,
+      sizeMb: (file.size / (1024 * 1024)).toFixed(1),
+    }))
+
+    setAdhocPendingVideos((prev) => [...prev, ...queued])
+    setBanner({ ok: true, msg: `${queued.length} adhoc video(s) queued for upload.` })
+  }
+
+  const removeQueuedAdhocVideo = (pendingVideoId: string) => {
+    setAdhocPendingVideos((prev) => prev.filter((video) => video.id !== pendingVideoId))
+  }
+
+  const handleUploadAdhocVideos = async () => {
+    setBanner(null)
+
+    if (!adhocPlayerId) {
+      setBanner({ ok: false, msg: "Select a player for adhoc upload." })
+      return
+    }
+
+    if (adhocPendingVideos.length === 0) {
+      setBanner({ ok: false, msg: "No adhoc videos queued for upload." })
+      return
+    }
+
+    const uploadTargets = adhocPendingVideos.map((video) => ({
+      file: video.file,
+      clientId: video.id,
+      playerId: adhocPlayerId,
+      tournamentId: null,
+      matchId: null,
+    }))
+
+    setBusy(true)
+
+    try {
+      const result = await uploadVideos(uploadTargets, (fileName, pct) => {
+        setAdhocProgressLabel(`${fileName} • ${pct}%`)
+      })
+
+      const failedNames = Array.from(
+        new Set(result.failed.map((item) => `${item.video.file.name}: ${item.error}`)),
+      )
+
+      setAdhocPendingVideos([])
+      await fetchAnalystData()
+
+      if (result.failed.length === 0) {
+        setBanner({
+          ok: true,
+          msg: `Uploaded and saved ${uploadTargets.length} adhoc video(s) for ${selectedAdhocPlayer?.name ?? "selected player"}.`,
+        })
+      } else {
+        const preview = failedNames.slice(0, 3).join(" | ")
+        setBanner({
+          ok: false,
+          msg: `${result.failed.length} adhoc upload(s) failed. ${preview}${failedNames.length > 3 ? " | ..." : ""}`,
+        })
+      }
+    } catch (uploadError) {
+      setBanner({
+        ok: false,
+        msg: uploadError instanceof Error ? uploadError.message : "Adhoc video upload failed",
+      })
+    } finally {
+      setBusy(false)
+      setAdhocProgressLabel(null)
+      setAdhocDragging(false)
+    }
+  }
+
   const handleSavePlayers = async (e: React.FormEvent) => {
     e.preventDefault()
     setBanner(null)
@@ -877,6 +989,7 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
             ["overview", "📋 Overview"],
             ["tournaments", "🏆 Tournaments"],
             ["matches", "🎥 Matches"],
+            ["adhoc", "📁 Adhoc Uploads"],
             ["access", "🔐 Player Access"],
           ] as const).map(([key, label]) => (
             <button
@@ -1166,6 +1279,150 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
               {filteredMatchesWithTournament.length === 0 && (
                 <div className="xl:col-span-2 rounded-[18px] border border-white/10 bg-slate-950/75 p-8 text-center backdrop-blur-2xl">
                   <p className="text-sm text-slate-400">No matches found for the selected tournament.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === "adhoc" && (
+          <div className="rounded-[18px] border border-white/10 bg-slate-950/75 p-7 backdrop-blur-2xl">
+            <p className="mb-2 text-base font-semibold text-slate-200">Adhoc Uploads</p>
+            <p className="mb-5 text-sm text-slate-400">
+              Upload multiple videos for a single player without linking them to a tournament or match.
+            </p>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div>
+                <label className="mb-2 block text-[11px] font-bold uppercase tracking-widest text-gray-500">
+                  Select Player
+                </label>
+                <select
+                  className={inputClass}
+                  value={adhocPlayerId}
+                  onChange={(e) => setAdhocPlayerId(e.target.value)}
+                  disabled={busy || playersSamePool.length === 0}
+                >
+                  {playersSamePool.length === 0 ? (
+                    <option value="" className="bg-slate-900 text-slate-100">
+                      No eligible players found
+                    </option>
+                  ) : (
+                    playersSamePool.map((player) => (
+                      <option key={player.id} value={player.id} className="bg-slate-900 text-slate-100">
+                        {player.name} • @{player.username}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-black/20 p-4 text-sm text-slate-300">
+                <p className="font-semibold text-slate-200">Upload Rule</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  Each adhoc batch is limited to one player. Server stores files under playerName_databaseId/adhoc.
+                </p>
+              </div>
+            </div>
+
+            <div
+              onDragOver={(e) => {
+                e.preventDefault()
+                setAdhocDragging(true)
+              }}
+              onDragLeave={() => setAdhocDragging(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setAdhocDragging(false)
+                queueAdhocVideos(Array.from(e.dataTransfer.files))
+              }}
+              className={cn(
+                "mt-5 rounded-xl border border-dashed p-6 text-center transition",
+                adhocDragging ? "border-blue-400/60 bg-blue-500/10" : "border-white/20 bg-black/20",
+              )}
+            >
+              <p className="text-sm font-semibold text-slate-100">Drag and drop adhoc video files</p>
+              <p className="mt-1 text-xs text-slate-400">or choose files from your device.</p>
+              <input
+                type="file"
+                accept="video/*"
+                multiple
+                className="mt-3 w-full cursor-pointer text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-blue-500/20 file:px-3 file:py-1.5 file:text-blue-200"
+                onChange={(e) => {
+                  const files = e.target.files ? Array.from(e.target.files) : []
+                  queueAdhocVideos(files)
+                  e.currentTarget.value = ""
+                }}
+              />
+            </div>
+
+            <div className="mt-5 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Queued Adhoc Videos</p>
+              {adhocPendingVideos.length === 0 ? (
+                <p className="text-xs text-slate-500">No adhoc videos queued yet.</p>
+              ) : (
+                <div className="max-h-56 space-y-2 overflow-auto pr-1">
+                  {adhocPendingVideos.map((video) => (
+                    <div
+                      key={video.id}
+                      className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300"
+                    >
+                      <div>
+                        <p className="font-medium text-slate-200">{video.fileName}</p>
+                        <p className="mt-1 text-slate-400">{video.sizeMb} MB</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removeQueuedAdhocVideo(video.id)}
+                        className="rounded-md border border-red-400/30 bg-red-500/10 px-2 py-1 text-[11px] font-semibold text-red-300"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {adhocProgressLabel && <p className="mt-4 text-xs text-blue-200">Uploading: {adhocProgressLabel}</p>}
+
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAdhocPendingVideos([])}
+                disabled={busy || adhocPendingVideos.length === 0}
+                className="rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Clear Queue
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleUploadAdhocVideos()}
+                disabled={busy || adhocPendingVideos.length === 0 || !adhocPlayerId}
+                className="rounded-lg bg-blue-500/20 px-4 py-2 text-xs font-semibold text-blue-200 transition hover:bg-blue-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {busy ? "Uploading..." : "Upload Adhoc Videos"}
+              </button>
+            </div>
+
+            <div className="mt-7 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">
+                Previously Uploaded Adhoc Videos
+              </p>
+              {adhocVideosForSelectedPlayer.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  No adhoc videos uploaded yet{selectedAdhocPlayer ? ` for ${selectedAdhocPlayer.name}` : ""}.
+                </p>
+              ) : (
+                <div className="max-h-64 space-y-2 overflow-auto pr-1">
+                  {adhocVideosForSelectedPlayer.map((video) => (
+                    <div key={video.id} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                      <p className="font-medium text-slate-200">{video.file_name}</p>
+                      <p className="mt-1 text-slate-400">
+                        {video.player_name} • {formatDate(video.created_at)}
+                      </p>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>
