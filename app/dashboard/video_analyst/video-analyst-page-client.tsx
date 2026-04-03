@@ -98,12 +98,52 @@ const formatDate = (iso: string) =>
 const inputClass =
   "w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-slate-100 outline-none transition placeholder:text-slate-500 focus:border-blue-400/70 focus:ring-2 focus:ring-blue-500/20"
 
+type DashboardTheme = "dark" | "light"
+
+const DASHBOARD_THEME_STORAGE_KEY = "dashboard-theme"
+
+const dashboardThemeClasses: Record<
+  DashboardTheme,
+  {
+    pageBg: string
+    glowOverlay: string
+    gridOverlay: string
+    chip: string
+    themeButton: string
+    secondaryButton: string
+  }
+> = {
+  dark: {
+    pageBg: "bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)]",
+    glowOverlay:
+      "bg-[radial-gradient(ellipse_at_20%_50%,rgba(59,130,246,0.06)_0%,transparent_60%),radial-gradient(ellipse_at_80%_20%,rgba(96,165,250,0.04)_0%,transparent_50%)]",
+    gridOverlay:
+      "bg-size-[48px_48px] bg-[linear-gradient(rgba(59,130,246,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.04)_1px,transparent_1px)]",
+    chip: "border border-blue-500/25 bg-blue-500/10 text-blue-200",
+    themeButton: "border-white/15 bg-white/5 text-slate-200 hover:bg-white/10",
+    secondaryButton: "border-white/15 text-slate-300 hover:bg-white/5",
+  },
+  light: {
+    pageBg: "bg-[linear-gradient(135deg,#f8fbff_0%,#eef3ff_52%,#f8fafc_100%)]",
+    glowOverlay:
+      "bg-[radial-gradient(ellipse_at_20%_50%,rgba(59,130,246,0.12)_0%,transparent_58%),radial-gradient(ellipse_at_80%_20%,rgba(14,165,233,0.08)_0%,transparent_48%)]",
+    gridOverlay:
+      "bg-size-[48px_48px] bg-[linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)]",
+    chip: "border border-blue-300/70 bg-blue-100/90 text-blue-900",
+    themeButton: "border-slate-300 bg-white/80 text-slate-700 hover:bg-slate-100",
+    secondaryButton: "border-slate-300 text-slate-700 hover:bg-slate-100",
+  },
+}
+
+const isDashboardTheme = (value: string): value is DashboardTheme => value === "dark" || value === "light"
+
 interface VideoAnalystPageClientProps {
   analystId: string
 }
 
 export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageClientProps) {
   const [activeTab, setActiveTab] = useState<DashboardTab>("overview")
+  const [theme, setTheme] = useState<DashboardTheme>("dark")
   const [data, setData] = useState<AnalystDataResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -133,6 +173,8 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
   const [accessModalMatchId, setAccessModalMatchId] = useState<string | null>(null)
   const [accessModalMatchTitle, setAccessModalMatchTitle] = useState("")
   const [accessModalInitialIds, setAccessModalInitialIds] = useState<string[]>([])
+
+  const themeClasses = dashboardThemeClasses[theme]
 
   const tournaments = data?.tournaments ?? []
   const playersSamePool = data?.players_same_gender_category ?? []
@@ -291,6 +333,17 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
   useEffect(() => {
     void fetchAnalystData()
   }, [analystId])
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem(DASHBOARD_THEME_STORAGE_KEY)
+    if (savedTheme && isDashboardTheme(savedTheme)) {
+      setTheme(savedTheme)
+    }
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem(DASHBOARD_THEME_STORAGE_KEY, theme)
+  }, [theme])
 
   const handleLogout = async () => {
     setLoggingOut(true)
@@ -910,7 +963,7 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
 
   if (loading) {
     return (
-      <div className="relative min-h-screen bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)]">
+      <div className={`relative min-h-screen ${themeClasses.pageBg}`}>
         <div className="mx-auto flex min-h-screen max-w-275 items-center justify-center px-6">
           <p className="text-sm text-slate-300">Loading video analyst dashboard...</p>
         </div>
@@ -920,13 +973,13 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
 
   if (error || !data?.analyst) {
     return (
-      <div className="relative min-h-screen bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)]">
+      <div className={`relative min-h-screen ${themeClasses.pageBg}`}>
         <div className="mx-auto flex min-h-screen max-w-275 flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-sm text-red-300">{error || "Unable to load analyst profile"}</p>
           <button
             type="button"
             onClick={() => void fetchAnalystData()}
-            className="rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/5"
+            className={`rounded-lg border px-4 py-2 text-xs font-semibold transition ${themeClasses.secondaryButton}`}
           >
             Retry
           </button>
@@ -936,9 +989,11 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)] font-['DM_Sans','Segoe_UI',sans-serif] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_20%_50%,rgba(59,130,246,0.06)_0%,transparent_60%),radial-gradient(ellipse_at_80%_20%,rgba(96,165,250,0.04)_0%,transparent_50%)]" />
-      <div className="pointer-events-none fixed inset-0 bg-size-[48px_48px] bg-[linear-gradient(rgba(59,130,246,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.04)_1px,transparent_1px)]" />
+    <div
+      className={`dashboard-theme-root relative min-h-screen overflow-x-hidden font-['DM_Sans','Segoe_UI',sans-serif] ${themeClasses.pageBg} ${theme === "light" ? "dashboard-theme-light text-slate-900" : "dashboard-theme-dark text-white"}`}
+    >
+      <div className={`pointer-events-none fixed inset-0 ${themeClasses.glowOverlay}`} />
+      <div className={`pointer-events-none fixed inset-0 ${themeClasses.gridOverlay}`} />
 
       <div className="relative mx-auto max-w-275 px-6 pb-20 pt-10">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -948,8 +1003,15 @@ export default function VideoAnalystPageClient({ analystId }: VideoAnalystPageCl
               Tournament Workspace
             </h1>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-4 py-2 text-[13px] font-semibold text-blue-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+              className={`rounded-lg border px-4 py-2 text-xs font-semibold transition ${themeClasses.themeButton}`}
+            >
+              {theme === "dark" ? "Light Theme" : "Dark Theme"}
+            </button>
+            <div className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold ${themeClasses.chip}`}>
               <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]" />
               {formatCategory(data.analyst.gender)} {formatCategory(data.analyst.category)}
             </div>

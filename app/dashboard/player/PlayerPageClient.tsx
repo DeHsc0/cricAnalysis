@@ -49,6 +49,54 @@ type VideoPlayState = {
   src: string;
 };
 
+type DashboardTheme = "dark" | "light";
+
+const THEME_STORAGE_KEY = "dashboard-theme";
+
+const dashboardThemeClasses: Record<
+  DashboardTheme,
+  {
+    pageBg: string;
+    glowOverlay: string;
+    gridOverlay: string;
+    panel: string;
+    statCard: string;
+    rowCard: string;
+    tagText: string;
+    chip: string;
+    secondaryButton: string;
+  }
+> = {
+  dark: {
+    pageBg: "bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)]",
+    glowOverlay:
+      "bg-[radial-gradient(ellipse_at_20%_50%,rgba(59,130,246,0.06)_0%,transparent_60%),radial-gradient(ellipse_at_80%_20%,rgba(96,165,250,0.04)_0%,transparent_50%)]",
+    gridOverlay:
+      "bg-size-[48px_48px] bg-[linear-gradient(rgba(59,130,246,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.04)_1px,transparent_1px)]",
+    panel: "border border-white/10 bg-slate-950/75",
+    statCard: "border border-white/10 bg-slate-950/70",
+    rowCard: "border border-white/10 bg-black/20 hover:border-white/20",
+    tagText: "text-blue-400",
+    chip: "border border-blue-500/25 bg-blue-500/10 text-blue-200",
+    secondaryButton: "border border-white/15 text-slate-300 hover:bg-white/5",
+  },
+  light: {
+    pageBg: "bg-[linear-gradient(135deg,#f8fbff_0%,#eef3ff_52%,#f8fafc_100%)]",
+    glowOverlay:
+      "bg-[radial-gradient(ellipse_at_20%_50%,rgba(59,130,246,0.12)_0%,transparent_58%),radial-gradient(ellipse_at_80%_20%,rgba(14,165,233,0.08)_0%,transparent_48%)]",
+    gridOverlay:
+      "bg-size-[48px_48px] bg-[linear-gradient(rgba(15,23,42,0.06)_1px,transparent_1px),linear-gradient(90deg,rgba(15,23,42,0.06)_1px,transparent_1px)]",
+    panel: "border border-slate-300/70 bg-white/80",
+    statCard: "border border-slate-300/70 bg-white/75",
+    rowCard: "border border-slate-300/80 bg-white/70 hover:border-slate-400",
+    tagText: "text-blue-700",
+    chip: "border border-blue-300/70 bg-blue-100/90 text-blue-900",
+    secondaryButton: "border border-slate-300 text-slate-700 hover:bg-slate-100",
+  },
+};
+
+const isDashboardTheme = (value: string): value is DashboardTheme => value in dashboardThemeClasses;
+
 const formatCategory = (cat: string) =>
   cat.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
@@ -77,6 +125,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [theme, setTheme] = useState<DashboardTheme>("dark");
 
   const [selectedTournamentId, setSelectedTournamentId] = useState<string>("");
   const [selectedMatchId, setSelectedMatchId] = useState<string>("");
@@ -91,6 +140,8 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
 
   const playerDisplayName =
     data?.player?.name?.trim() || data?.player?.username?.trim() || "Player";
+
+  const themeClasses = dashboardThemeClasses[theme];
 
   const tournaments = data?.tournaments ?? [];
 
@@ -173,6 +224,17 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
     void fetchPlayerDashboard();
   }, [playerId]);
 
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme && isDashboardTheme(savedTheme)) {
+      setTheme(savedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(THEME_STORAGE_KEY, theme);
+  }, [theme]);
+
   const handleLogout = async () => {
     setLoggingOut(true);
 
@@ -247,7 +309,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
 
   if (loading) {
     return (
-      <div className="relative min-h-screen bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)]">
+      <div className={`relative min-h-screen ${themeClasses.pageBg}`}>
         <div className="mx-auto flex min-h-screen max-w-275 items-center justify-center px-6">
           <p className="text-sm text-slate-300">Loading player dashboard...</p>
         </div>
@@ -257,13 +319,13 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
 
   if (error || !data?.player) {
     return (
-      <div className="relative min-h-screen bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)]">
+      <div className={`relative min-h-screen ${themeClasses.pageBg}`}>
         <div className="mx-auto flex min-h-screen max-w-275 flex-col items-center justify-center gap-3 px-6 text-center">
           <p className="text-sm text-red-300">{error || "Unable to load player dashboard"}</p>
           <button
             type="button"
             onClick={() => void fetchPlayerDashboard()}
-            className="rounded-lg border border-white/15 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:bg-white/5"
+            className={`rounded-lg px-4 py-2 text-xs font-semibold transition ${themeClasses.secondaryButton}`}
           >
             Retry
           </button>
@@ -273,21 +335,31 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
   }
 
   return (
-    <div className="relative min-h-screen overflow-x-hidden bg-[linear-gradient(135deg,#0a0f1d_0%,#0d1526_50%,#0a0f1d_100%)] font-['DM_Sans','Segoe_UI',sans-serif] text-white">
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(ellipse_at_20%_50%,rgba(59,130,246,0.06)_0%,transparent_60%),radial-gradient(ellipse_at_80%_20%,rgba(96,165,250,0.04)_0%,transparent_50%)]" />
-      <div className="pointer-events-none fixed inset-0 bg-size-[48px_48px] bg-[linear-gradient(rgba(59,130,246,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(59,130,246,0.04)_1px,transparent_1px)]" />
+    <div
+      className={`dashboard-theme-root relative min-h-screen overflow-x-hidden font-['DM_Sans','Segoe_UI',sans-serif] ${themeClasses.pageBg} ${theme === "light" ? "dashboard-theme-light text-slate-900" : "dashboard-theme-dark text-white"}`}
+    >
+      <div className={`pointer-events-none fixed inset-0 ${themeClasses.glowOverlay}`} />
+      <div className={`pointer-events-none fixed inset-0 ${themeClasses.gridOverlay}`} />
 
       <div className="relative mx-auto max-w-275 px-6 pb-20 pt-10">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="mb-1.5 text-[12px] font-semibold uppercase tracking-[0.12em] text-blue-400">Dashboard</p>
+            <p className={`mb-1.5 text-[12px] font-semibold uppercase tracking-[0.12em] ${themeClasses.tagText}`}>Dashboard</p>
             <h1 className="m-0 bg-[linear-gradient(135deg,#ffffff_0%,#94a3b8_100%)] bg-clip-text text-3xl font-bold tracking-[-0.02em] text-transparent md:text-[32px]">
               {playerDisplayName}
             </h1>
             <p className="mt-1 text-sm text-slate-400">Video Library Dashboard</p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="inline-flex items-center gap-2 rounded-lg border border-blue-500/25 bg-blue-500/10 px-4 py-2 text-[13px] font-semibold text-blue-200">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setTheme((prev) => (prev === "dark" ? "light" : "dark"))}
+              className={`rounded-lg border px-4 py-2 text-xs font-semibold transition ${themeClasses.secondaryButton}`}
+            >
+              {theme === "dark" ? "Light Theme" : "Dark Theme"}
+            </button>
+
+            <div className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold ${themeClasses.chip}`}>
               <span className="h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_#22c55e]" />
               {formatCategory(data.player.gender)} {formatCategory(data.player.category)}
             </div>
@@ -315,7 +387,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
           ].map((card) => (
             <div
               key={card.label}
-              className="rounded-[14px] border border-white/10 bg-slate-950/70 px-5 py-4 backdrop-blur-xl"
+              className={`rounded-[14px] px-5 py-4 backdrop-blur-xl ${themeClasses.statCard}`}
             >
               <p className="text-[11px] font-semibold uppercase tracking-[0.11em] text-slate-400">
                 {card.icon} {card.label}
@@ -326,7 +398,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
         </section>
 
         {!selectedTournamentId && (
-          <section className="rounded-[18px] border border-white/10 bg-slate-950/75 p-5 backdrop-blur-2xl">
+          <section className={`rounded-[18px] p-5 backdrop-blur-2xl ${themeClasses.panel}`}>
             <div className="mb-4">
               <h2 className="text-lg font-semibold text-slate-100">Your Tournaments</h2>
             </div>
@@ -349,7 +421,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
                         setSelectedTournamentId(tournament.id);
                         setSelectedMatchId("");
                       }}
-                      className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-left text-slate-300 transition hover:border-white/20"
+                      className={`w-full rounded-xl px-4 py-4 text-left text-slate-300 transition ${themeClasses.rowCard}`}
                     >
                       <p className="text-base font-semibold text-slate-100">{tournament.name}</p>
                       <p className="mt-1 text-xs text-slate-400">
@@ -365,15 +437,17 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
         )}
 
         {selectedTournamentId && !selectedMatchId && selectedTournament && (
-          <section className="rounded-[18px] border border-white/10 bg-slate-950/75 p-5 backdrop-blur-2xl">
+          <section className={`rounded-[18px] p-5 backdrop-blur-2xl ${themeClasses.panel}`}>
             <div className="mb-4">
               <div className="mb-3 flex justify-start">
                 <button
                   type="button"
                   onClick={goBackToTournaments}
-                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
+                  aria-label="Back to tournaments"
+                  title="Back to tournaments"
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-base font-semibold transition ${themeClasses.secondaryButton}`}
                 >
-                  Back To Tournaments
+                  ←
                 </button>
               </div>
               <h2 className="mt-1 text-lg font-semibold text-slate-100">Matches In {selectedTournament.name}</h2>
@@ -388,7 +462,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
                     key={match.id}
                     type="button"
                     onClick={() => setSelectedMatchId(match.id)}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-left text-slate-300 transition hover:border-white/20"
+                    className={`w-full rounded-xl px-4 py-4 text-left text-slate-300 transition ${themeClasses.rowCard}`}
                   >
                     <p className="text-base font-semibold text-slate-100">{match.name}</p>
                     <p className="mt-1 text-xs text-slate-400">
@@ -403,15 +477,17 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
         )}
 
         {selectedMatchId && selectedTournament && selectedMatch && (
-          <section className="rounded-[18px] border border-white/10 bg-slate-950/75 p-5 backdrop-blur-2xl">
+          <section className={`rounded-[18px] p-5 backdrop-blur-2xl ${themeClasses.panel}`}>
             <div className="mb-4">
               <div className="mb-3 flex justify-start">
                 <button
                   type="button"
-                  onClick={goBackToTournaments}
-                  className="rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:bg-white/5"
+                  onClick={() => setSelectedMatchId("")}
+                  aria-label="Back to matches"
+                  title="Back to matches"
+                  className={`inline-flex h-8 w-8 items-center justify-center rounded-lg text-base font-semibold transition ${themeClasses.secondaryButton}`}
                 >
-                  Back To Tournaments
+                  ←
                 </button>
               </div>
               <h2 className="mt-1 text-lg font-semibold text-slate-100">Videos In {selectedMatch.name}</h2>
@@ -429,7 +505,7 @@ export default function PlayerPageClient({ playerId }: PlayerPageClientProps) {
                     key={video.id}
                     type="button"
                     onClick={() => void openVideo(video)}
-                    className="w-full rounded-xl border border-white/10 bg-black/20 px-4 py-4 text-left text-slate-300 transition hover:border-white/20"
+                    className={`w-full rounded-xl px-4 py-4 text-left text-slate-300 transition ${themeClasses.rowCard}`}
                   >
                     <p className="text-base font-semibold text-slate-100">Video {index + 1}: {video.file_name}</p>
                     <p className="mt-1 text-xs text-slate-400">

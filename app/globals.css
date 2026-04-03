@@ -128,3 +128,211 @@
     @apply font-sans;
   }
 }
+
+@layer components {
+  .dashboard-theme-light {
+    color: rgb(15 23 42);
+  }
+
+  .dashboard-theme-light .text-white,
+  .dashboard-theme-light .text-slate-100 {
+    color: rgb(15 23 42) !important;
+  }
+
+  .dashboard-theme-light .text-slate-200 {
+    color: rgb(30 41 59) !important;
+  }
+
+  .dashboard-theme-light .text-slate-300,
+  .dashboard-theme-light .text-slate-400,
+  .dashboard-theme-light .text-slate-500,
+  .dashboard-theme-light .text-gray-300,
+  .dashboard-theme-light .text-gray-400,
+  .dashboard-theme-light .text-gray-500 {
+    color: rgb(71 85 105) !important;
+  }
+
+  .dashboard-theme-light .bg-slate-950,
+  .dashboard-theme-light .bg-slate-950\/75,
+  .dashboard-theme-light .bg-slate-950\/70,
+  .dashboard-theme-light .bg-slate-950\/65,
+  .dashboard-theme-light .bg-slate-950\/60,
+  .dashboard-theme-light .bg-slate-900\/80 {
+    background-color: rgba(255, 255, 255, 0.86) !important;
+  }
+
+  .dashboard-theme-light .bg-black\/40 {
+    background-color: rgba(241, 245, 249, 0.9) !important;
+  }
+
+  .dashboard-theme-light .bg-black\/30,
+  .dashboard-theme-light .bg-black\/20,
+  .dashboard-theme-light .bg-white\/5 {
+    background-color: rgba(241, 245, 249, 0.72) !important;
+  }
+
+  .dashboard-theme-light .border-white\/10,
+  .dashboard-theme-light .border-white\/15,
+  .dashboard-theme-light .border-white\/20,
+  .dashboard-theme-light .border-white\/\[0\.04\] {
+    border-color: rgba(71, 85, 105, 0.28) !important;
+  }
+
+  .dashboard-theme-light [class~="text-blue-100"],
+  .dashboard-theme-light [class~="text-blue-200"],
+  .dashboard-theme-light [class~="text-blue-300"],
+  .dashboard-theme-light [class~="text-blue-400"],
+  .dashboard-theme-light [class~="text-blue-500"] {
+    color: rgb(30 64 175) !important;
+  }
+
+  .dashboard-theme-light [class~="text-red-200"],
+  .dashboard-theme-light [class~="text-red-300"] {
+    color: rgb(153 27 27) !important;
+  }
+
+  .dashboard-theme-light [class~="text-green-300"] {
+    color: rgb(21 128 61) !important;
+  }
+
+  .dashboard-theme-light [class~="text-violet-300"] {
+    color: rgb(109 40 217) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-blue-500/10"] {
+    background-color: rgba(59, 130, 246, 0.18) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-blue-500/15"] {
+    background-color: rgba(59, 130, 246, 0.22) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-blue-500/20"] {
+    background-color: rgba(59, 130, 246, 0.28) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-blue-500/30"] {
+    background-color: rgba(59, 130, 246, 0.34) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-green-500/10"] {
+    background-color: rgba(34, 197, 94, 0.2) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-red-500/10"] {
+    background-color: rgba(239, 68, 68, 0.18) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-red-500/20"] {
+    background-color: rgba(239, 68, 68, 0.26) !important;
+  }
+
+  .dashboard-theme-light [class~="bg-violet-500/15"] {
+    background-color: rgba(139, 92, 246, 0.22) !important;
+  }
+
+  .dashboard-theme-light [class~="border-blue-500/25"],
+  .dashboard-theme-light [class~="border-blue-500/30"],
+  .dashboard-theme-light [class~="border-blue-400/30"],
+  .dashboard-theme-light [class~="border-blue-400/40"],
+  .dashboard-theme-light [class~="border-blue-500/50"] {
+    border-color: rgba(37, 99, 235, 0.5) !important;
+  }
+
+  .dashboard-theme-light [class~="border-red-400/30"] {
+    border-color: rgba(220, 38, 38, 0.5) !important;
+  }
+
+  .dashboard-theme-light [class~="border-green-400/30"] {
+    border-color: rgba(22, 163, 74, 0.5) !important;
+  }
+
+  .dashboard-theme-light [class~="border-violet-500/30"] {
+    border-color: rgba(124, 58, 237, 0.5) !important;
+  }
+
+  .dashboard-theme-light [class~="hover:bg-blue-500/20"]:hover {
+    background-color: rgba(59, 130, 246, 0.34) !important;
+  }
+
+  .dashboard-theme-light [class~="hover:bg-blue-500/30"]:hover {
+    background-color: rgba(59, 130, 246, 0.4) !important;
+  }
+
+  .dashboard-theme-light [class~="hover:bg-red-500/20"]:hover {
+    background-color: rgba(239, 68, 68, 0.34) !important;
+  }
+
+  .dashboard-theme-light .bg-clip-text.text-transparent {
+    background-image: linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%) !important;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .dashboard-theme-light h1.text-transparent,
+  .dashboard-theme-light h2.text-transparent,
+  .dashboard-theme-light h3.text-transparent {
+    color: rgb(15 23 42) !important;
+    background-image: none !important;
+    -webkit-text-fill-color: currentColor !important;
+  }
+
+  .dashboard-theme-light [class*="text-blue-"] {
+    color: rgb(30 64 175) !important;
+  }
+
+  .dashboard-theme-light [class*="text-red-"] {
+    color: rgb(153 27 27) !important;
+  }
+
+  .dashboard-theme-light [class*="text-green-"] {
+    color: rgb(21 128 61) !important;
+  }
+
+  .dashboard-theme-light [class*="text-violet-"] {
+    color: rgb(109 40 217) !important;
+  }
+
+  .dashboard-theme-light [class*="bg-blue-500/"] {
+    background-color: rgba(59, 130, 246, 0.24) !important;
+  }
+
+  .dashboard-theme-light [class*="bg-red-500/"] {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+  }
+
+  .dashboard-theme-light [class*="bg-green-500/"] {
+    background-color: rgba(34, 197, 94, 0.2) !important;
+  }
+
+  .dashboard-theme-light [class*="bg-violet-500/"] {
+    background-color: rgba(139, 92, 246, 0.2) !important;
+  }
+
+  .dashboard-theme-light [class*="border-blue-"] {
+    border-color: rgba(37, 99, 235, 0.5) !important;
+  }
+
+  .dashboard-theme-light [class*="border-red-"] {
+    border-color: rgba(220, 38, 38, 0.5) !important;
+  }
+
+  .dashboard-theme-light [class*="border-green-"] {
+    border-color: rgba(22, 163, 74, 0.5) !important;
+  }
+
+  .dashboard-theme-light [class*="border-violet-"] {
+    border-color: rgba(124, 58, 237, 0.5) !important;
+  }
+
+  .dashboard-theme-light button[class*="bg-blue-"] {
+    color: rgb(15 23 42) !important;
+  }
+
+  .dashboard-theme-light button[class*="bg-red-"] {
+    color: rgb(127 29 29) !important;
+  }
+
+  .dashboard-theme-light button[class*="bg-green-"] {
+    color: rgb(20 83 45) !important;
+  }
+}
